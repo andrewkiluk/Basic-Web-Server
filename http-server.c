@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 
         /* clntSock is connected to a client! */
 
-        printf("Handling client %s\n", inet_ntoa(ClntAddr.sin_addr));
+        printf("%s ", inet_ntoa(ClntAddr.sin_addr));
 
       HandleHTTPClient(argv[2], argv[3], atoi(argv[4]), clntSock);
     }
