@@ -2,8 +2,5 @@ Andrew Kiluk
 aek2140
 Lab 7
 
-
-The description should indicate whether your solution for the part is
-working or not.  You may also want to include anything else you would
-like to communicate to the grader such as extra functionalities you
-implemented or how you tried to fix your non-working code.
+The web server works as specified. I changed the row colors to rotate among 3 colors when giving
+mdb-lookup results, for no good reason. This was a lot of fun!
