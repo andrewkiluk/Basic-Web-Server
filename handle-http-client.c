@@ -3,7 +3,7 @@
 #include <arpa/inet.h>  /* for sockaddr_in and inet_ntoa() */
 #include <stdlib.h>     /* for atoi() and exit() */
 #include <string.h>     /* for memset() */
-#include <unistd.h>     /* for close() */
+#include <unistd.h>     /* for fclose() */
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -15,12 +15,11 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
   char buffer[BUF_SIZE];
   char first_line[BUF_SIZE];
   char initial_request[BUF_SIZE];
+  
   FILE *pipe = fdopen(clntSock,"r+");
   if (pipe == NULL)
     printf("Error opening clntSock as a file\n");
-  FILE *mdbpipe = fdopen(mdbSock,"r+");
-  if (mdbpipe == NULL)
-    printf("Error opening mdbSock as a file\n");
+  
   const char *mdb_lookup_form =
   "<h1>mdb-lookup</h1>\n"
   "<p>\n"
@@ -34,8 +33,9 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
     
     strncpy(first_line, buffer, sizeof(first_line));
 
-    // We make a copy of the request we were given so we can reference it later. We replace 
-    // line breaks with null characters so it will print more nicely.
+    // We make a copy of the request we were given so we can reference it later, in case 
+    // it fails our parsing. We replace line breaks with null characters so it will 
+    // print more nicely.
     strncpy(initial_request, buffer, sizeof(initial_request));
     int i = 0;
     for(i=0; i < strlen(initial_request); i++){
@@ -48,7 +48,6 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
   while(fgets(buffer, BUF_SIZE - 1 , pipe) != NULL){
     if ( (strcmp(buffer, "\n") && strcmp(buffer, "\r\n")) == 0){
 
-
       // Here we break up the request line into a few useful strings.
       char *token_separators = "\t \r\n"; // tab, space, new line
       char *method = strtok(first_line, token_separators);
@@ -60,7 +59,7 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 	printf("\"%s\" 400 Bad Request\n", initial_request);
 	fprintf(pipe, "HTTP/1.0 400 Bad Request\r\n\r\n<html><body>\r\n<h1>400 Bad Request</h1>\r\n</body></html>\r\n");
 	fflush(pipe);
-	close(clntSock);
+	fclose(pipe);
 	return;
       }
 
@@ -69,7 +68,7 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 	printf("\"%s %s %s\" 501 Not Implemented\n", method, requestURI, httpVersion);
 	fprintf(pipe, "HTTP/1.0 501 Not Implemented\r\n\r\n<html><body>\r\n<h1>501 Not Implemented</h1>\r\n</body></html>\r\n");
 	fflush(pipe);
-	close(clntSock);
+	fclose(pipe);
 	return;
       }
       // We check that the request line is terminated by a valid HTTP version.
@@ -77,7 +76,7 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 	printf("\"%s %s %s\" 400 Bad Request\n", method, requestURI, httpVersion);
 	fprintf(pipe, "HTTP/1.0 400 Bad Request\r\n\r\n<html><body>\r\n<h1>501 Not Implemented</h1>\r\n</body></html>\r\n");
 	fflush(pipe);
-	close(clntSock);
+	fclose(pipe);
 	return;
       }
       // Here we check that GET is requesting a file, beginning with a /, and that there are 
@@ -86,7 +85,7 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 	printf("\"%s %s %s\" 400 Bad Request\n", method, requestURI, httpVersion);
 	fprintf(pipe, "HTTP/1.0 400 Bad Request\r\n\r\n<html><body>\r\n<h1>400 Bad Request</h1>\r\n</body></html>\r\n");
 	fflush(pipe);
-	close(clntSock);
+	fclose(pipe);
 	return;
       }
       // If the request has passed all of our tests, we should be ready to provide what the
@@ -96,8 +95,13 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
       if ( (strncmp(requestURI, "/mdb-lookup", 12) == 0) 
 	|| (strncmp(requestURI, "/mdb-lookup/", 12) == 0) ){
 	
-	// Looks like an initial mdb-lookup request. We send a header saying that's cool, 
-	// and we log the event on the server.
+	// Looks like an initial mdb-lookup request. We first open mdbSock as a file.
+
+        FILE *mdbpipe = fdopen(dup(mdbSock),"r+");
+        if (mdbpipe == NULL)
+          printf("Error opening mdbSock as a file\n");
+
+        // We send a header saying that's cool, and we log the event on the server.
 
 	fprintf(pipe, "HTTP/1.0 200 OK\r\n");
 	fprintf(pipe, "\r\n");
@@ -106,13 +110,20 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 	// Next we send them the form to do mdb-lookup requests.
 	fprintf(pipe, "<html><body>\n%s</html></body>", mdb_lookup_form);
 	fflush(pipe);
-	close(clntSock);
+	fclose(mdbpipe);
+	fclose(pipe);
 	return;
       }
       if ( strncmp(requestURI, "/mdb-lookup?key=", 16) == 0) {
 
-	// Ok, looks like they're submitting an mdb-lookup query. Let's point to the 
-	// actual query:
+	// Ok, looks like they're submitting an mdb-lookup query. We first 
+	// open the socket as a file.
+        
+	FILE *mdbpipe = fdopen(dup(mdbSock),"r+");
+        if (mdbpipe == NULL)
+          printf("Error opening mdbSock as a file\n");
+
+        // Let's point to the actual query:
 
 	char *mdb_query = strchr(requestURI, '=') + 1;
 	
@@ -153,7 +164,8 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 
 	fprintf(pipe, "</table>\n</body></html>");
 	fflush(pipe);
-	close(clntSock);
+	fclose(mdbpipe);
+	fclose(pipe);
 	return;
       }
 
@@ -161,14 +173,31 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
       // they want to download a file.
 
       // We first concatenate the server and user file paths.
-      char file_path[300];
+      char file_path[400];
       strcpy(file_path, web_root);
       strcat(file_path, requestURI);
 
+
       // Now we need to check if the file requested is a directory. If so, we append index.html.
       struct stat statinfo;
+      memset (&statinfo,0,sizeof(statinfo));
       stat(file_path, &statinfo);
       if (S_ISDIR(statinfo.st_mode)){
+        
+	// If the directory does not end in '/', we redirect the client to the version with '/'.
+        if(file_path[strlen(file_path) - 1] != '/'){
+          char fixedURI[400];
+	  strncpy(fixedURI, requestURI, sizeof(fixedURI) - 1);
+	  fixedURI[strlen(fixedURI)] = '/';
+	  fixedURI[strlen(fixedURI) + 1] = '\0';
+	
+	  fprintf(pipe, "HTTP/1.0 301 Moved Permanently\r\n");
+	  fprintf(pipe, "Location: %s\r\n", fixedURI);
+	  fprintf(pipe, "\r\n");
+	  fflush(pipe);
+	  fclose(pipe);
+	  return;
+        }
 	strcat(file_path, "index.html");
       }
       FILE *reqFile;
@@ -182,13 +211,14 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 	printf("\"%s %s %s\" 404 Not Found\n", method, requestURI, httpVersion);
 	fprintf(pipe, "HTTP/1.0 404 Not Found\r\n\r\n<html><body>\r\n<h1>404 Not Found</h1>\r\n</body></html>\r\n\r\n");        
 	fflush(pipe);
-	close(clntSock);
+	fclose(pipe);
 	return;
       }
       
       // Here we add some headers.
       if(strstr(file_path, ".html")){
 	fprintf(pipe, "Content-Type: text/html\r\n");
+
       }
 
       if(strstr(file_path, ".jpg")){
@@ -209,7 +239,7 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 	  printf("Error in file access\n");
 	  fprintf(pipe, "HTTP/1.0 500 Internal Server Error\r\n\r\n<html><body>\r\n<h1>500 Internal Server Error</h1>\r\n</body></html>\r\n\r\n");
 	  fflush(pipe);
-	  close(clntSock);
+	  fclose(pipe);
 	  return;
 	}
 	if(fwrite(buffer, 1, bytes_read, pipe) < 0){
@@ -218,7 +248,8 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
       }
       
       fflush(pipe);
-      close(clntSock);
+      fclose(reqFile);
+      fclose(pipe);
       return;
     }
   }

@@ -118,6 +118,7 @@ int main(int argc, char *argv[])
       printf("%s ", inet_ntoa(ClntAddr.sin_addr));
 
       HandleHTTPClient(webRoot, clntSock, mdbSock);
+      //close(clntSock);
     }
     /* NOT REACHED */
     return 0;
