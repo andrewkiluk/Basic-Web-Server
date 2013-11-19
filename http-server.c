@@ -9,7 +9,7 @@
 
 #define MAXPENDING 5    /* Maximum outstanding connection requests */
 
-void HandleHTTPClient(char *web_root, int clntSock, FILE *mdbpipe);   /* TCP client handling function */
+void HandleHTTPClient(char *web_root, int clntSock);   /* TCP client handling function */
 
 static void DieWithError(const char *message)
 {
@@ -37,15 +37,13 @@ int main(int argc, char *argv[])
 
     if (argc != 5)     /* Test for correct number of arguments */
     {
-        fprintf(stderr, "Usage:  %s <server-port> <web_root> <mdb-lookup-host> <mdb-lookup-port>\n", argv[0]);
+        fprintf(stderr, "Usage:  %s <server-port> <web_root>\n", argv[0]);
         exit(1);
     }
     
     ServPort = atoi(argv[1]);  /* First arg:  local port */
     char *webRoot = argv[2];
-    char *mdbHostname = argv[3];
-    unsigned short mdbPort = atoi(argv[4]);
-    
+
 
     /* Create socket for incoming connections */
     if ((servSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
@@ -81,7 +79,7 @@ int main(int argc, char *argv[])
 
       printf("%s ", inet_ntoa(ClntAddr.sin_addr));
 
-      HandleHTTPClient(webRoot, clntSock, mdbpipe);
+      HandleHTTPClient(webRoot, clntSock);
     }
     /* NOT REACHED */
     return 0;
