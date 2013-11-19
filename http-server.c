@@ -9,15 +9,13 @@
 
 #define MAXPENDING 5    /* Maximum outstanding connection requests */
 
-void HandleHTTPClient(char *web_root, int clntSock, int mdbSock);   /* TCP client handling function */
+void HandleHTTPClient(char *web_root, int clntSock, FILE *mdbpipe);   /* TCP client handling function */
 
 static void DieWithError(const char *message)
 {
     perror(message);
     exit(1); 
 }
-
-
 
 
 int main(int argc, char *argv[])
@@ -77,6 +75,13 @@ int main(int argc, char *argv[])
     if (connect(mdbSock, (struct sockaddr *) &mdbAddr, sizeof(mdbAddr)) < 0)
       DieWithError("connect() failed");
 
+    /* We want to use fgets to read lines, so we will open a FILE * pointing to the 
+       md-lookup socket */
+
+    FILE *mdbpipe = fdopen(dup(mdbSock),"r+");
+    if (mdbpipe == NULL)
+     printf("Error opening mdbSock as a file\n");
+
 
 
     // Now we are ready to establish a socket connection to listen for clients.
@@ -117,8 +122,7 @@ int main(int argc, char *argv[])
 
       printf("%s ", inet_ntoa(ClntAddr.sin_addr));
 
-      HandleHTTPClient(webRoot, clntSock, mdbSock);
-      //close(clntSock);
+      HandleHTTPClient(webRoot, clntSock, mdbpipe);
     }
     /* NOT REACHED */
     return 0;

@@ -11,14 +11,27 @@
 
 const int BUF_SIZE = 4096;
 
-void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
+
+void httpError_and_return(char *error_message, FILE *client_connection, char *initial_request)
+{
+  printf("\"%s\" %s\n", initial_request, error_message);
+  fprintf(client_connection, "HTTP/1.0 %s\r\n\r\n<html><body>\r\n<h1>400 Bad Request</h1>\r\n</body></html>\r\n", error_message);
+  fflush(client_connection);
+  fclose(client_connection);
+  return;
+}
+  
+
+void HandleHTTPClient(char *web_root, int clntSock, FILE *mdbpipe){
   char buffer[BUF_SIZE];
   char first_line[BUF_SIZE];
   char initial_request[BUF_SIZE];
   
   FILE *pipe = fdopen(clntSock,"r+");
-  if (pipe == NULL)
+  if (pipe == NULL){
     printf("Error opening clntSock as a file\n");
+    httpError_and_return("500 Internal Server Error", pipe, initial_request);
+  }
   
   const char *mdb_lookup_form =
   "<h1>mdb-lookup</h1>\n"
@@ -56,37 +69,21 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
      
       // Now we check that none of these pointers are NULL.
       if ( !( method && requestURI && httpVersion) ) {
-	printf("\"%s\" 400 Bad Request\n", initial_request);
-	fprintf(pipe, "HTTP/1.0 400 Bad Request\r\n\r\n<html><body>\r\n<h1>400 Bad Request</h1>\r\n</body></html>\r\n");
-	fflush(pipe);
-	fclose(pipe);
-	return;
+	httpError_and_return("400 Bad Request", pipe, initial_request);
       }
 
       // This server only supports GET requests, so we throw out anything else.
       if ( (strlen(method) < 3) || (strncmp("GET", method, 4) != 0) ) {
-	printf("\"%s %s %s\" 501 Not Implemented\n", method, requestURI, httpVersion);
-	fprintf(pipe, "HTTP/1.0 501 Not Implemented\r\n\r\n<html><body>\r\n<h1>501 Not Implemented</h1>\r\n</body></html>\r\n");
-	fflush(pipe);
-	fclose(pipe);
-	return;
+	httpError_and_return("501 Not Implemented", pipe, initial_request);
       }
       // We check that the request line is terminated by a valid HTTP version.
       if ((strlen(httpVersion) < 8) || ((strncmp("HTTP/1.0", httpVersion, 8) != 0) && (strncmp("HTTP/1.1", httpVersion, 8)) != 0) ) {
-	printf("\"%s %s %s\" 400 Bad Request\n", method, requestURI, httpVersion);
-	fprintf(pipe, "HTTP/1.0 400 Bad Request\r\n\r\n<html><body>\r\n<h1>501 Not Implemented</h1>\r\n</body></html>\r\n");
-	fflush(pipe);
-	fclose(pipe);
-	return;
+	httpError_and_return("501 Not Implemented", pipe, initial_request);
       }
       // Here we check that GET is requesting a file, beginning with a /, and that there are 
       // no references to parent directories for security reasons.
       if ((strncmp("/", requestURI, 1) != 0 ) || (strstr(requestURI, "..")) ) {
-	printf("\"%s %s %s\" 400 Bad Request\n", method, requestURI, httpVersion);
-	fprintf(pipe, "HTTP/1.0 400 Bad Request\r\n\r\n<html><body>\r\n<h1>400 Bad Request</h1>\r\n</body></html>\r\n");
-	fflush(pipe);
-	fclose(pipe);
-	return;
+	httpError_and_return("400 Bad Request", pipe, initial_request);
       }
       // If the request has passed all of our tests, we should be ready to provide what the
       // client requested.
@@ -95,38 +92,25 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
       if ( (strncmp(requestURI, "/mdb-lookup", 12) == 0) 
 	|| (strncmp(requestURI, "/mdb-lookup/", 12) == 0) ){
 	
-	// Looks like an initial mdb-lookup request. We first open mdbSock as a file.
-
-        FILE *mdbpipe = fdopen(dup(mdbSock),"r+");
-        if (mdbpipe == NULL)
-          printf("Error opening mdbSock as a file\n");
-
-        // We send a header saying that's cool, and we log the event on the server.
+	// Looks like an initial mdb-lookup request. We send a header saying that's cool
+	// and we log the event on the server.
 
 	fprintf(pipe, "HTTP/1.0 200 OK\r\n");
 	fprintf(pipe, "\r\n");
-	printf("\"%s %s %s\" 200 OK\n", method, requestURI, httpVersion);
+	printf("\"%s\" 200 OK\n", initial_request);
 
 	// Next we send them the form to do mdb-lookup requests.
 	fprintf(pipe, "<html><body>\n%s</html></body>", mdb_lookup_form);
 	fflush(pipe);
-	fclose(mdbpipe);
 	fclose(pipe);
 	return;
       }
       if ( strncmp(requestURI, "/mdb-lookup?key=", 16) == 0) {
 
-	// Ok, looks like they're submitting an mdb-lookup query. We first 
-	// open the socket as a file.
-        
-	FILE *mdbpipe = fdopen(dup(mdbSock),"r+");
-        if (mdbpipe == NULL)
-          printf("Error opening mdbSock as a file\n");
-
-        // Let's point to the actual query:
+	// Ok, they're submitting an mdb-lookup query. Let's point to the actual query:
 
 	char *mdb_query = strchr(requestURI, '=') + 1;
-	
+        printf("good so far\n");
 	// We now send a header saying that's cool, and log the event on the server.
 
 	fprintf(pipe, "HTTP/1.0 200 OK\r\n");
@@ -164,7 +148,6 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 
 	fprintf(pipe, "</table>\n</body></html>");
 	fflush(pipe);
-	fclose(mdbpipe);
 	fclose(pipe);
 	return;
       }
@@ -208,11 +191,7 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
 	fprintf(pipe, "HTTP/1.0 200 OK\r\n");
       }
       else{
-	printf("\"%s %s %s\" 404 Not Found\n", method, requestURI, httpVersion);
-	fprintf(pipe, "HTTP/1.0 404 Not Found\r\n\r\n<html><body>\r\n<h1>404 Not Found</h1>\r\n</body></html>\r\n\r\n");        
-	fflush(pipe);
-	fclose(pipe);
-	return;
+	httpError_and_return("404 Not Found", pipe, initial_request);
       }
       
       // Here we add some headers.
@@ -237,10 +216,7 @@ void HandleHTTPClient(char *web_root, int clntSock, int mdbSock){
       while((bytes_read = fread(buffer, 1, BUF_SIZE, reqFile))){
 	if(bytes_read < 0){
 	  printf("Error in file access\n");
-	  fprintf(pipe, "HTTP/1.0 500 Internal Server Error\r\n\r\n<html><body>\r\n<h1>500 Internal Server Error</h1>\r\n</body></html>\r\n\r\n");
-	  fflush(pipe);
-	  fclose(pipe);
-	  return;
+	  httpError_and_return("500 Internal Server Error", pipe, initial_request);
 	}
 	if(fwrite(buffer, 1, bytes_read, pipe) < 0){
 	  break;
