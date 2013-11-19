@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
       DieWithError("signal() failed");
 
 
-    if (argc != 5)     /* Test for correct number of arguments */
+    if (argc != 3)     /* Test for correct number of arguments */
     {
         fprintf(stderr, "Usage:  %s <server-port> <web_root>\n", argv[0]);
         exit(1);
