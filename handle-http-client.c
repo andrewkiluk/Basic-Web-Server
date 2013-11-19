@@ -33,15 +33,6 @@ void HandleHTTPClient(char *web_root, int clntSock, FILE *mdbpipe){
     httpError_and_return("500 Internal Server Error", pipe, initial_request);
   }
   
-  const char *mdb_lookup_form =
-  "<h1>mdb-lookup</h1>\n"
-  "<p>\n"
-  "<form method=GET action=/mdb-lookup>\n"
-  "lookup: <input type=text name=key>\n"
-  "<input type=submit>\n"
-  "</form>\n"
-  "<p>\n";
-
   if(fgets(buffer, BUF_SIZE - 1 , pipe) != NULL){
     
     strncpy(first_line, buffer, sizeof(first_line));
@@ -87,73 +78,6 @@ void HandleHTTPClient(char *web_root, int clntSock, FILE *mdbpipe){
       }
       // If the request has passed all of our tests, we should be ready to provide what the
       // client requested.
-
-      // We first check if they have requested mdb-lookup.
-      if ( (strncmp(requestURI, "/mdb-lookup", 12) == 0) 
-	|| (strncmp(requestURI, "/mdb-lookup/", 12) == 0) ){
-	
-	// Looks like an initial mdb-lookup request. We send a header saying that's cool
-	// and we log the event on the server.
-
-	fprintf(pipe, "HTTP/1.0 200 OK\r\n");
-	fprintf(pipe, "\r\n");
-	printf("\"%s\" 200 OK\n", initial_request);
-
-	// Next we send them the form to do mdb-lookup requests.
-	fprintf(pipe, "<html><body>\n%s</html></body>", mdb_lookup_form);
-	fflush(pipe);
-	fclose(pipe);
-	return;
-      }
-      if ( strncmp(requestURI, "/mdb-lookup?key=", 16) == 0) {
-
-	// Ok, they're submitting an mdb-lookup query. Let's point to the actual query:
-
-	char *mdb_query = strchr(requestURI, '=') + 1;
-        printf("good so far\n");
-	// We now send a header saying that's cool, and log the event on the server.
-
-	fprintf(pipe, "HTTP/1.0 200 OK\r\n");
-	fprintf(pipe, "\r\n");
-	
-	printf(" -> looking up [%s] \"%s %s %s\" 200 OK\n", mdb_query, method, requestURI, httpVersion);
-
-        // Now we send the query to mdb-lookup-server.
-	fprintf(mdbpipe, "%s\n", mdb_query);
-
-	// We are now ready to return the results to the client. We first send the beginning:
-
-	fprintf(pipe, "<html><body>\n%s\n", mdb_lookup_form);
-	fprintf(pipe, "<p><table border>\n");
-
-	// Now we recieve one row at a time from mdb-lookup-server, and send it to the client.
-        
-	int row_number = 0;
-	while( (fgets(buffer, BUF_SIZE - 1, mdbpipe) != NULL) 
-	    && (strcmp(buffer, "\n") != 0 ) ){
-	  if(row_number % 3 == 0){
-	    fprintf(pipe, "<tr><td bgcolor=C4D8E2>  %s", buffer);
-	  }
-	  if(row_number % 3 == 1){
-	    fprintf(pipe, "<tr><td>  %s", buffer);
-	  }
-	  if(row_number % 3 == 2){
-	    fprintf(pipe, "<tr><td bgcolor=DAA520>  %s", buffer);
-	  }
-          row_number++;
-        }
-
-	// Now we send the end of the HTML document, flush the output pipe, and 
-	// close the connection.
-
-	fprintf(pipe, "</table>\n</body></html>");
-	fflush(pipe);
-	fclose(pipe);
-	return;
-      }
-
-      // At this point we know the user didn't request mdb-lookup services, so we next assume
-      // they want to download a file.
 
       // We first concatenate the server and user file paths.
       char file_path[400];
