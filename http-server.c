@@ -21,14 +21,12 @@ static void DieWithError(const char *message)
 int main(int argc, char *argv[])
 {
     int servSock;                    /* Socket descriptor for server */
-    int mdbSock;                     /* Socket descriptor for mdb-lookup-server */
     int clntSock;                    /* Socket descriptor for client */
     struct sockaddr_in ServAddr;     /* Local address */
     struct sockaddr_in ClntAddr;     /* Client address */
-    struct sockaddr_in mdbAddr;      /* mdb-lookup-server address */
     unsigned short ServPort;         /* Server port */
     unsigned int clntLen;            /* Length of client address data structure */
-    char *mdbIP;                     /* mdb-lookup-server IP address */
+
 
     
     // ignore SIGPIPE so that we don’t terminate when we call
@@ -48,45 +46,6 @@ int main(int argc, char *argv[])
     char *mdbHostname = argv[3];
     unsigned short mdbPort = atoi(argv[4]);
     
-
-
-    // We first want to establish a connection with the mdb-lookup-server.
-
-    
-    // Get mdb IP from server name
-    struct hostent *he;
-    if ((he = gethostbyname(mdbHostname)) == NULL) {
-      DieWithError("gethostbyname failed");
-    }
-    mdbIP = inet_ntoa(*(struct in_addr *)he->h_addr);
-//    free(he);
-
-    /* Create socket for mdb-lookup-server connection */
-    if ((mdbSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-        DieWithError("socket() failed");
-
-    /* Construct mdb-lookup-server address structure */
-    memset(&mdbAddr, 0, sizeof(mdbAddr));   /* Zero out structure */
-    mdbAddr.sin_family = AF_INET;           /* Internet address family */
-    inet_aton(mdbIP, &(mdbAddr.sin_addr));  /* mdb-lookup-server IP address */
-    mdbAddr.sin_port = htons(mdbPort);      /* mdb-lookup-server port */
-
-    /* Establish the connection to mdb-lookup-server */
-    if (connect(mdbSock, (struct sockaddr *) &mdbAddr, sizeof(mdbAddr)) < 0)
-      DieWithError("connect() failed");
-
-    /* We want to use fgets to read lines, so we will open a FILE * pointing to the 
-       md-lookup socket */
-
-    FILE *mdbpipe = fdopen(dup(mdbSock),"r+");
-    if (mdbpipe == NULL)
-     printf("Error opening mdbSock as a file\n");
-
-
-
-    // Now we are ready to establish a socket connection to listen for clients.
-
-
 
     /* Create socket for incoming connections */
     if ((servSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
