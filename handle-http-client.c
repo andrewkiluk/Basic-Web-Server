@@ -22,7 +22,7 @@ void httpError_and_return(char *error_message, FILE *client_connection, char *in
 }
   
 
-void HandleHTTPClient(char *web_root, int clntSock, FILE *mdbpipe){
+void HandleHTTPClient(char *web_root, int clntSock){
   char buffer[BUF_SIZE];
   char first_line[BUF_SIZE];
   char initial_request[BUF_SIZE];
