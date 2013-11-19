@@ -1,17 +1,12 @@
-
-#
-# Makefile for lab 6, part 1
-#
-
 CC  = gcc
 CXX = g++
 
-INCLUDES = -I../lab3/part1
+INCLUDES = 
 CFLAGS   = -g -Wall $(INCLUDES)
 CXXFLAGS = -g -Wall $(INCLUDES)
 
-LDFLAGS = -g -L../lab3/part1
-LDLIBS = -lmylist
+LDFLAGS = -g 
+LDLIBS = 
 
 http-server: http-server.o handle-http-client.o
 
