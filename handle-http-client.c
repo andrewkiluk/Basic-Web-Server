@@ -12,13 +12,12 @@
 const int BUF_SIZE = 4096;
 
 
-void httpError_and_return(char *error_message, FILE *client_connection, char *initial_request)
+void httpError(char *error_message, FILE *client_connection, char *initial_request)
 {
   printf("\"%s\" %s\n", initial_request, error_message);
   fprintf(client_connection, "HTTP/1.0 %s\r\n\r\n<html><body>\r\n<h1>400 Bad Request</h1>\r\n</body></html>\r\n", error_message);
   fflush(client_connection);
   fclose(client_connection);
-  return;
 }
   
 
@@ -30,7 +29,8 @@ void HandleHTTPClient(char *web_root, int clntSock){
   FILE *pipe = fdopen(clntSock,"r+");
   if (pipe == NULL){
     printf("Error opening clntSock as a file\n");
-    httpError_and_return("500 Internal Server Error", pipe, initial_request);
+    httpError("500 Internal Server Error", pipe, initial_request);
+    return;
   }
   
   if(fgets(buffer, BUF_SIZE - 1 , pipe) != NULL){
@@ -60,21 +60,25 @@ void HandleHTTPClient(char *web_root, int clntSock){
      
       // Now we check that none of these pointers are NULL.
       if ( !( method && requestURI && httpVersion) ) {
-	httpError_and_return("400 Bad Request", pipe, initial_request);
+	httpError("400 Bad Request", pipe, initial_request);
+	return;
       }
 
       // This server only supports GET requests, so we throw out anything else.
       if ( (strlen(method) < 3) || (strncmp("GET", method, 4) != 0) ) {
-	httpError_and_return("501 Not Implemented", pipe, initial_request);
+	httpError("501 Not Implemented", pipe, initial_request);
+	return;
       }
       // We check that the request line is terminated by a valid HTTP version.
       if ((strlen(httpVersion) < 8) || ((strncmp("HTTP/1.0", httpVersion, 8) != 0) && (strncmp("HTTP/1.1", httpVersion, 8)) != 0) ) {
-	httpError_and_return("501 Not Implemented", pipe, initial_request);
+	httpError("501 Not Implemented", pipe, initial_request);
+	return;
       }
       // Here we check that GET is requesting a file, beginning with a /, and that there are 
       // no references to parent directories for security reasons.
       if ((strncmp("/", requestURI, 1) != 0 ) || (strstr(requestURI, "..")) ) {
-	httpError_and_return("400 Bad Request", pipe, initial_request);
+	httpError("400 Bad Request", pipe, initial_request);
+	return;
       }
       // If the request has passed all of our tests, we should be ready to provide what the
       // client requested.
@@ -115,7 +119,8 @@ void HandleHTTPClient(char *web_root, int clntSock){
 	fprintf(pipe, "HTTP/1.0 200 OK\r\n");
       }
       else{
-	httpError_and_return("404 Not Found", pipe, initial_request);
+	httpError("404 Not Found", pipe, initial_request);
+	return;
       }
       
       // Here we add some headers.
@@ -140,7 +145,8 @@ void HandleHTTPClient(char *web_root, int clntSock){
       while((bytes_read = fread(buffer, 1, BUF_SIZE, reqFile))){
 	if(bytes_read < 0){
 	  printf("Error in file access\n");
-	  httpError_and_return("500 Internal Server Error", pipe, initial_request);
+	  httpError("500 Internal Server Error", pipe, initial_request);
+	  return;
 	}
 	if(fwrite(buffer, 1, bytes_read, pipe) < 0){
 	  break;
